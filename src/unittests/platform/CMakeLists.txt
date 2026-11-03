@@ -18,6 +18,13 @@ elseif(APPLE)
     WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/platform"
   )
   create_test(
+    NAME OSXScrollConvertTests
+    DEPENDS platform
+    LIBS base arch
+    SOURCE OSXScrollConvertTests.cpp
+    WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/src/lib/platform"
+  )
+  create_test(
     NAME OSXKeyStateTests
     DEPENDS platform
     LIBS base arch
