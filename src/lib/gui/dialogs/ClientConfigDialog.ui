@@ -165,6 +165,16 @@
     </widget>
    </item>
    <item>
+    <widget class="QCheckBox" name="cbSmoothScroll">
+     <property name="toolTip">
+      <string>Post pixel scroll events with gesture phases, so trackpad scrolling, swipe navigation and momentum feel native. Smoothest when the server also has smooth scrolling enabled.</string>
+     </property>
+     <property name="text">
+      <string>Use smooth scrolling (macOS only)</string>
+     </property>
+    </widget>
+   </item>
+   <item>
     <widget class="QPushButton" name="btnClearServerHistory">
      <property name="text">
       <string>Clear Server History</string>

@@ -378,6 +378,16 @@
            </widget>
           </item>
           <item>
+           <widget class="QCheckBox" name="cbSmoothScroll">
+            <property name="toolTip">
+             <string>Send trackpad and Magic Mouse scrolling as fine-grained deltas instead of whole lines. Clients without smooth scrolling support mishandle these (macOS clients drop small scrolls, X11 clients scroll too fast), so only enable this when your clients also support it.</string>
+            </property>
+            <property name="text">
+             <string>Send smooth scrolling (macOS only)</string>
+            </property>
+           </widget>
+          </item>
+          <item>
            <layout class="QHBoxLayout" name="layoutClipboard">
             <item>
              <widget class="QCheckBox" name="cbEnableClipboard">

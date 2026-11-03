@@ -7,6 +7,7 @@
 #include "ClientConfigDialog.h"
 #include "ui_ClientConfigDialog.h"
 
+#include "common/PlatformInfo.h"
 #include "common/Settings.h"
 #include "gui/widgets/SettingsDialogButtonBox.h"
 
@@ -20,6 +21,8 @@ ClientConfigDialog::ClientConfigDialog(QWidget *parent)
   ui->setupUi(this);
   layout()->addWidget(m_buttonBox);
   ui->btnClearServerHistory->setIcon(QIcon::fromTheme(QStringLiteral("edit-clear-all")));
+  if (!deskflow::platform::isMac())
+    ui->cbSmoothScroll->setVisible(false);
   initConnections();
   load();
   updateControls();
@@ -47,6 +50,7 @@ void ClientConfigDialog::updateControls() const
   ui->sbXScrollScale->setEnabled(writable);
   ui->cbYScrollInvert->setEnabled(writable);
   ui->sbYScrollScale->setEnabled(writable);
+  ui->cbSmoothScroll->setEnabled(writable);
   ui->btnClearServerHistory->setEnabled(
       writable && !Settings::value(Settings::Client::RecentRemoteHosts).toStringList().isEmpty()
   );
@@ -68,6 +72,7 @@ void ClientConfigDialog::initConnections() const
   connect(ui->sbYScrollScale, &QDoubleSpinBox::valueChanged, this, &ClientConfigDialog::setButtonBoxEnabledButtons);
   connect(ui->cbXScrollInvert, &QCheckBox::checkStateChanged, this, &ClientConfigDialog::setButtonBoxEnabledButtons);
   connect(ui->sbXScrollScale, &QDoubleSpinBox::valueChanged, this, &ClientConfigDialog::setButtonBoxEnabledButtons);
+  connect(ui->cbSmoothScroll, &QCheckBox::checkStateChanged, this, &ClientConfigDialog::setButtonBoxEnabledButtons);
   connect(Settings::instance(), &Settings::settingsWritableChanged, this, &ClientConfigDialog::updateControls);
 }
 
@@ -79,7 +84,8 @@ bool ClientConfigDialog::isModified() const
          (ui->cbYScrollInvert->isChecked() != Settings::value(Settings::Client::InvertYScroll).toBool()) ||
          (ui->sbYScrollScale->value() != Settings::value(Settings::Client::YScrollScale).toDouble()) ||
          (ui->cbXScrollInvert->isChecked() != Settings::value(Settings::Client::InvertXScroll).toBool()) ||
-         (ui->sbXScrollScale->value() != Settings::value(Settings::Client::XScrollScale).toDouble());
+         (ui->sbXScrollScale->value() != Settings::value(Settings::Client::XScrollScale).toDouble()) ||
+         (ui->cbSmoothScroll->isChecked() != Settings::value(Settings::Client::SmoothScroll).toBool());
 }
 
 bool ClientConfigDialog::isDefault() const
@@ -90,7 +96,8 @@ bool ClientConfigDialog::isDefault() const
          (ui->cbYScrollInvert->isChecked() == Settings::defaultValue(Settings::Client::InvertYScroll).toBool()) &&
          (ui->sbYScrollScale->value() == Settings::defaultValue(Settings::Client::YScrollScale).toDouble()) &&
          (ui->cbXScrollInvert->isChecked() == Settings::defaultValue(Settings::Client::InvertXScroll).toBool()) &&
-         (ui->sbXScrollScale->value() == Settings::defaultValue(Settings::Client::XScrollScale).toDouble());
+         (ui->sbXScrollScale->value() == Settings::defaultValue(Settings::Client::XScrollScale).toDouble()) &&
+         (ui->cbSmoothScroll->isChecked() == Settings::defaultValue(Settings::Client::SmoothScroll).toBool());
 }
 
 void ClientConfigDialog::setButtonBoxEnabledButtons() const
@@ -109,6 +116,7 @@ void ClientConfigDialog::load()
   ui->sbYScrollScale->setValue(Settings::value(Settings::Client::YScrollScale).toDouble());
   ui->cbXScrollInvert->setChecked(Settings::value(Settings::Client::InvertXScroll).toBool());
   ui->sbXScrollScale->setValue(Settings::value(Settings::Client::XScrollScale).toDouble());
+  ui->cbSmoothScroll->setChecked(Settings::value(Settings::Client::SmoothScroll).toBool());
   setButtonBoxEnabledButtons();
 }
 
@@ -120,6 +128,7 @@ void ClientConfigDialog::resetToDefault()
   ui->sbYScrollScale->setValue(Settings::defaultValue(Settings::Client::YScrollScale).toDouble());
   ui->cbXScrollInvert->setChecked(Settings::defaultValue(Settings::Client::InvertXScroll).toBool());
   ui->sbXScrollScale->setValue(Settings::defaultValue(Settings::Client::XScrollScale).toDouble());
+  ui->cbSmoothScroll->setChecked(Settings::defaultValue(Settings::Client::SmoothScroll).toBool());
 }
 
 void ClientConfigDialog::save()
@@ -130,6 +139,7 @@ void ClientConfigDialog::save()
   Settings::setValue(Settings::Client::YScrollScale, ui->sbYScrollScale->value());
   Settings::setValue(Settings::Client::InvertXScroll, ui->cbXScrollInvert->isChecked());
   Settings::setValue(Settings::Client::XScrollScale, ui->sbXScrollScale->value());
+  Settings::setValue(Settings::Client::SmoothScroll, ui->cbSmoothScroll->isChecked());
   QDialog::accept();
 }
 
