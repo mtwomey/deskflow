@@ -41,6 +41,7 @@ public:
     inline static const auto InvertXScroll = QStringLiteral("client/invertXScroll");
     inline static const auto YScrollScale = QStringLiteral("client/yScrollScale");
     inline static const auto XScrollScale = QStringLiteral("client/xScrollScale");
+    inline static const auto SmoothScroll = QStringLiteral("client/smoothScroll");
     inline static const auto LanguageSync = QStringLiteral("client/languageSync");
     inline static const auto RemoteHost = QStringLiteral("client/remoteHost");
     inline static const auto RecentRemoteHosts = QStringLiteral("client/recentRemoteHosts");
@@ -117,6 +118,7 @@ public:
     inline static const auto Heartbeat = QStringLiteral("server/heartbeat");
     inline static const auto Protocol = QStringLiteral("server/protocol");
     inline static const auto RelativeMouseMoves = QStringLiteral("server/relativeMouseMoves");
+    inline static const auto SmoothScroll = QStringLiteral("server/smoothScroll");
     inline static const auto SwitchDelay = QStringLiteral("server/switchDelay");
     inline static const auto SwitchDoubleTap = QStringLiteral("server/switchDoubleTap");
     inline static const auto Win32KeepForeground = QStringLiteral("server/win32KeepForeground");
@@ -282,6 +284,7 @@ private:
     , Client::RecentRemoteHosts
     , Client::YScrollScale
     , Client::XScrollScale
+    , Client::SmoothScroll
     , Core::CoreMode
     , Core::Interface
     , Core::LastVersion
@@ -334,6 +337,7 @@ private:
     , Server::Heartbeat
     , Server::Protocol
     , Server::RelativeMouseMoves
+    , Server::SmoothScroll
     , Server::SwitchDelay
     , Server::SwitchDoubleTap
     , Server::Win32KeepForeground
@@ -354,6 +358,7 @@ private:
     , Client::InvertYScroll
     , Client::InvertXScroll
     , Client::LanguageSync
+    , Client::SmoothScroll
     , Client::XdpClipboardRetried
     , Log::ToFile
     , Log::GuiDebug
@@ -364,6 +369,7 @@ private:
     , Server::EnableSwitchDoubleTap
     , Server::ExternalConfig
     , Server::RelativeMouseMoves
+    , Server::SmoothScroll
     , Server::XdpClipboardRetried
   };
 
