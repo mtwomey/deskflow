@@ -276,7 +276,7 @@ jobs:
         run: ${{env.CMAKE_CONFIGURE}} ${{ matrix.target.config-args }} ${{ steps.get-deps.outputs.vcpkg-cmake-config }} -DPACKAGE_VERSION_LABEL="${{env.DESKFLOW_PACKAGE_VERSION}}"
 
       - name: Import code-signing certificate
-        if: runner.os == 'macOS' && ((github.ref == 'refs/heads/master') || (contains(github.ref, '/tags/v')))
+        if: github.repository == 'deskflow/deskflow' && runner.os == 'macOS' && ((github.ref == 'refs/heads/master') || (contains(github.ref, '/tags/v')))
         uses: ./.github/actions/codesign-keychain
         with:
           action: import
@@ -320,7 +320,7 @@ jobs:
           fi
 
       - name: Notarize (macOS)
-        if: runner.os == 'macOS' && ((github.ref == 'refs/heads/master') || (contains(github.ref, '/tags/v')))
+        if: github.repository == 'deskflow/deskflow' && runner.os == 'macOS' && ((github.ref == 'refs/heads/master') || (contains(github.ref, '/tags/v')))
         shell: bash
         env:
           APPLE_NOTARIZE_ID: ${{ secrets.APPLE_NOTARIZE_ID }}
@@ -342,7 +342,7 @@ jobs:
           xcrun stapler staple build/deskflow[-_]*.dmg
 
       - name: Clean up keychain
-        if: always() && runner.os == 'macOS' && ((github.ref == 'refs/heads/master') || (contains(github.ref, '/tags/v')))
+        if: always() && github.repository == 'deskflow/deskflow' && runner.os == 'macOS' && ((github.ref == 'refs/heads/master') || (contains(github.ref, '/tags/v')))
         uses: ./.github/actions/codesign-keychain
         with:
           action: cleanup
@@ -517,13 +517,14 @@ jobs:
         with:
           token: "${{ secrets.GITHUB_TOKEN }}"
           generate_release_notes: true
-          make_latest: true
-          prerelease: false
+          make_latest: ${{ github.repository == 'deskflow/deskflow' }}
+          prerelease: ${{ github.repository != 'deskflow/deskflow' }}
           files: |
             deskflow-*
             sums.txt
 
       - name: Update Homebrewtap
+        if: github.repository == 'deskflow/deskflow'
         shell: bash
         run: |
           curl -L -X POST \
