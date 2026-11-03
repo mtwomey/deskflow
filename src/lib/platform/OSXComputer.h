@@ -11,6 +11,7 @@
 #include "deskflow/PlatformComputer.h"
 #include "platform/OSXClipboard.h"
 #include "platform/OSXPowerManager.h"
+#include "platform/OSXScrollConvert.h"
 
 #include <Carbon/Carbon.h>
 #include <IOKit/IOMessage.h>
@@ -140,6 +141,9 @@ private:
 
   // map mac scroll wheel value to a deskflow scroll wheel value
   int32_t mapScrollWheelToDeskflow(int32_t) const;
+
+  // inject a pixel scroll with a synthesized gesture phase (smooth scroll option)
+  void fakeSmoothMouseWheel(ScrollDelta delta) const;
 
   // get the current scroll wheel speed
   double getScrollSpeed() const;
@@ -322,4 +326,13 @@ private:
   OSXPowerManager m_powerManager;
 
   class OSXComputerImpl *m_impl;
+
+  // Smooth scroll: pixel-precise capture (server) and injection (client).
+  bool m_smoothScrollCapture = false;
+  bool m_smoothScrollInject = false;
+  deskflow::scroll::PixelScrollState m_pixelScrollCapture;
+  mutable deskflow::scroll::PixelScrollState m_pixelScrollInject;
+
+  // Synthesized gesture phase for injected pixel scrolls, see fakeMouseWheel().
+  mutable std::shared_ptr<struct OSXScrollPhaseState> m_scrollPhase;
 };

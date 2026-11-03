@@ -40,6 +40,7 @@
 #include <libproc.h>
 #include <mach-o/dyld.h>
 #include <math.h>
+#include <mutex>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
@@ -115,6 +116,9 @@ OSXComputer::OSXComputer(IEventQueue *events, bool isPrimary, bool enableLangSyn
       m_events(events),
       m_impl(nullptr)
 {
+  m_smoothScrollCapture = m_isPrimary && Settings::value(Settings::Server::SmoothScroll).toBool();
+  m_smoothScrollInject = !m_isPrimary && Settings::value(Settings::Client::SmoothScroll).toBool();
+
   m_displayID = CGMainDisplayID();
   if (!updateComputerShape(m_displayID, 0)) {
     throw DisplayInvalidException("failed to initialize computer shape");
@@ -622,8 +626,55 @@ void OSXComputer::fakeMouseRelativeMove(int32_t dx, int32_t dy) const
   m_cursorPosValid = false;
 }
 
+// The Deskflow protocol carries no gesture phase, so with smooth scroll the
+// client rebuilds one. Apps such as browsers only run swipe tracking and
+// rubber-banding for phased scroll events.
+//  - The first scroll after idle is kCGScrollPhaseBegan, then Changed.
+//  - A smooth-scroll server sends a (0,0) wheel message when the finger lifts
+//    and when the momentum glide ends. On the first marker Ended is posted at
+//    once; scrolls that follow within kMomentumStartMs are the glide and are
+//    posted as momentum events (Begin/Continue, End on the second marker).
+//  - Without markers (other servers) the open phase is closed by a timer
+//    kScrollPhaseIdleMs after the last scroll.
+enum class ScrollGestureMode
+{
+  Idle,
+  Touch,
+  MomentumPending,
+  Momentum
+};
+
+struct OSXScrollPhaseState
+{
+  std::mutex mutex;
+  uint64_t generation = 0;
+  ScrollGestureMode mode = ScrollGestureMode::Idle;
+  uint64_t markerAtNs = 0;
+  dispatch_queue_t queue = dispatch_queue_create("org.deskflow.scroll-phase", DISPATCH_QUEUE_SERIAL);
+};
+
+namespace {
+constexpr int64_t kScrollPhaseIdleMs = 150;
+constexpr uint64_t kMomentumStartMs = 80;
+
+void postPhasedScroll(int32_t px, int32_t py, int64_t phase, int64_t momentum, CGEventFlags flags)
+{
+  CGEventRef ev = CGEventCreateScrollWheelEvent(nullptr, kCGScrollEventUnitPixel, 2, py, px);
+  CGEventSetIntegerValueField(ev, kCGScrollWheelEventIsContinuous, 1);
+  CGEventSetIntegerValueField(ev, kCGScrollWheelEventScrollPhase, phase);
+  CGEventSetIntegerValueField(ev, kCGScrollWheelEventMomentumPhase, momentum);
+  CGEventSetFlags(ev, flags);
+  CGEventPost(kCGHIDEventTap, ev);
+  CFRelease(ev);
+}
+} // namespace
+
 void OSXComputer::fakeMouseWheel(ScrollDelta delta) const
 {
+  if (m_smoothScrollInject) {
+    fakeSmoothMouseWheel(delta);
+    return;
+  }
   if (delta.x != 0 || delta.y != 0) {
     delta = applyScrollModifier(
         {static_cast<int32_t>(delta.x / s_scrollDelta), static_cast<int32_t>(delta.y / s_scrollDelta)}
@@ -639,6 +690,91 @@ void OSXComputer::fakeMouseWheel(ScrollDelta delta) const
     CGEventPost(kCGHIDEventTap, scrollEvent);
     CFRelease(scrollEvent);
   }
+}
+
+void OSXComputer::fakeSmoothMouseWheel(ScrollDelta delta) const
+{
+  if (!m_scrollPhase) {
+    m_scrollPhase = std::make_shared<OSXScrollPhaseState>();
+  }
+  std::shared_ptr<OSXScrollPhaseState> state = m_scrollPhase;
+  const CGEventFlags modifiers = m_keyState->getModifierStateAsOSXFlags(); // sticky keys fix
+
+  if (delta.x == 0 && delta.y == 0) {
+    // Gesture marker (finger lift or end of momentum) from a smooth-scroll server.
+    std::lock_guard<std::mutex> lock(state->mutex);
+    ++state->generation;
+    switch (state->mode) {
+    case ScrollGestureMode::Touch:
+      postPhasedScroll(0, 0, kCGScrollPhaseEnded, 0, modifiers);
+      state->mode = ScrollGestureMode::MomentumPending;
+      state->markerAtNs = clock_gettime_nsec_np(CLOCK_UPTIME_RAW);
+      break;
+    case ScrollGestureMode::Momentum:
+      postPhasedScroll(0, 0, 0, kCGMomentumScrollPhaseEnd, modifiers);
+      state->mode = ScrollGestureMode::Idle;
+      break;
+    default:
+      state->mode = ScrollGestureMode::Idle;
+      break;
+    }
+    m_pixelScrollInject.x.reset();
+    m_pixelScrollInject.y.reset();
+    return;
+  }
+
+  // Convert protocol units to pixels and carry the fractional remainder, so
+  // sub-120 deltas are never dropped and 120-unit notches still scroll
+  // (kPixelsPer120 pixels each).
+  delta = applyScrollModifier(delta);
+  const int32_t px = m_pixelScrollInject.x.push(deskflow::scroll::unitsToPixels(delta.x));
+  const int32_t py = m_pixelScrollInject.y.push(deskflow::scroll::unitsToPixels(delta.y));
+  if (px == 0 && py == 0) {
+    return; // remainder carried to the next event
+  }
+
+  uint64_t generation;
+  {
+    std::lock_guard<std::mutex> lock(state->mutex);
+    int64_t phase = 0;
+    int64_t momentum = 0;
+    switch (state->mode) {
+    case ScrollGestureMode::MomentumPending:
+      if (clock_gettime_nsec_np(CLOCK_UPTIME_RAW) - state->markerAtNs <= kMomentumStartMs * NSEC_PER_MSEC) {
+        state->mode = ScrollGestureMode::Momentum; // glide right after lift-off
+        momentum = kCGMomentumScrollPhaseBegin;
+      } else {
+        state->mode = ScrollGestureMode::Touch; // a new touch
+        phase = kCGScrollPhaseBegan;
+      }
+      break;
+    case ScrollGestureMode::Momentum:
+      momentum = kCGMomentumScrollPhaseContinue;
+      break;
+    case ScrollGestureMode::Touch:
+      phase = kCGScrollPhaseChanged;
+      break;
+    case ScrollGestureMode::Idle:
+      state->mode = ScrollGestureMode::Touch;
+      phase = kCGScrollPhaseBegan;
+      break;
+    }
+    postPhasedScroll(px, py, phase, momentum, modifiers);
+    generation = ++state->generation;
+  }
+
+  // Close the open phase once the stream goes idle, unless a newer event or
+  // marker arrived meanwhile.
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, kScrollPhaseIdleMs * NSEC_PER_MSEC), state->queue, ^{
+    std::lock_guard<std::mutex> lock(state->mutex);
+    if (state->generation != generation)
+      return;
+    if (state->mode == ScrollGestureMode::Touch)
+      postPhasedScroll(0, 0, kCGScrollPhaseEnded, 0, modifiers);
+    else if (state->mode == ScrollGestureMode::Momentum)
+      postPhasedScroll(0, 0, 0, kCGMomentumScrollPhaseEnd, modifiers);
+    state->mode = ScrollGestureMode::Idle;
+  });
 }
 
 void OSXComputer::showCursor()
@@ -1698,6 +1834,27 @@ CGEventRef OSXComputer::handleCGInputEvent(CGEventTapProxy proxy, CGEventType ty
     computer->onMouseMove(event);
     break;
   case kCGEventScrollWheel:
+    // Smooth scroll (server option): for continuous devices send the pixel
+    // deltas as sub-120 protocol units instead of whole line deltas.
+    if (computer->m_smoothScrollCapture && CGEventGetIntegerValueField(event, kCGScrollWheelEventIsContinuous) != 0) {
+      const double pxX = CGEventGetDoubleValueField(event, kCGScrollWheelEventPointDeltaAxis2);
+      const double pxY = CGEventGetDoubleValueField(event, kCGScrollWheelEventPointDeltaAxis1);
+      const int32_t ux = computer->m_pixelScrollCapture.x.push(deskflow::scroll::pixelsToUnits(pxX));
+      const int32_t uy = computer->m_pixelScrollCapture.y.push(deskflow::scroll::pixelsToUnits(pxY));
+      if (ux != 0 || uy != 0) {
+        computer->onMouseWheel(ux, uy);
+      }
+      // Mark the finger lift and the end of the momentum glide with a (0,0)
+      // wheel message so a smooth-scroll client can close the gesture at once.
+      const int64_t phase = CGEventGetIntegerValueField(event, kCGScrollWheelEventScrollPhase);
+      const int64_t momentum = CGEventGetIntegerValueField(event, kCGScrollWheelEventMomentumPhase);
+      if (phase == kCGScrollPhaseEnded || phase == kCGScrollPhaseCancelled || momentum == kCGMomentumScrollPhaseEnd) {
+        computer->m_pixelScrollCapture.x.reset();
+        computer->m_pixelScrollCapture.y.reset();
+        computer->onMouseWheel(0, 0);
+      }
+      break;
+    }
     computer->onMouseWheel(
         computer->mapScrollWheelToDeskflow(CGEventGetIntegerValueField(event, kCGScrollWheelEventDeltaAxis2)),
         computer->mapScrollWheelToDeskflow(CGEventGetIntegerValueField(event, kCGScrollWheelEventDeltaAxis1))
