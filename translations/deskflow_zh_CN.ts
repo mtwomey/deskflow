@@ -177,6 +177,14 @@ p, li { white-space: pre-wrap; }
         <source>Clear Server History</source>
         <translation type="unfinished">清除服务器历史记录</translation>
     </message>
+    <message>
+        <source>Use smooth scrolling (macOS only)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Post pixel scroll events with gesture phases, so trackpad scrolling, swipe navigation and momentum feel native. Smoothest when the server also has smooth scrolling enabled.</source>
+        <translation type="unfinished"></translation>
+    </message>
 </context>
 <context>
     <name>ComputerSettingsDialog</name>
@@ -1101,6 +1109,14 @@ Enabling this setting will disable the server config GUI.</source>
     <message>
         <source>Enable lock to computer at startup</source>
         <translation type="unfinished">启动时启用锁定到计算机</translation>
+    </message>
+    <message>
+        <source>Send smooth scrolling (macOS only)</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <source>Send trackpad and Magic Mouse scrolling as fine-grained deltas instead of whole lines. Clients without smooth scrolling support mishandle these (macOS clients drop small scrolls, X11 clients scroll too fast), so only enable this when your clients also support it.</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
