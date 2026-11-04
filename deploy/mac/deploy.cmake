@@ -10,13 +10,18 @@ set(OS_STRING "macos-${BUILD_ARCHITECTURE}")
 
 if (OSX_BUNDLE)
   set(_codesign_identity "-")
+  # Ad-hoc ("-") signing plus the hardened runtime makes dyld library validation reject the
+  # bundled Qt frameworks ("different Team IDs"), so an unsigned build crashes at launch.
+  # Only enable the hardened runtime when a real signing identity is configured.
+  set(_codesign_options "")
   if (APPLE_CODESIGN_DEV)
     set(_codesign_identity "${APPLE_CODESIGN_DEV}")
+    set(_codesign_options "-hardened-runtime -timestamp")
   endif()
   install(CODE "execute_process(COMMAND
     ${DEPLOYQT}
     \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_PROJECT_PROPER_NAME}.app\"
-    -hardened-runtime -timestamp \"-codesign=${_codesign_identity}\"
+    ${_codesign_options} \"-codesign=${_codesign_identity}\"
   )")
   set(CPACK_PACKAGE_ICON "${MY_DIR}/dmg-volume.icns")
   set(CPACK_DMG_BACKGROUND_IMAGE "${MY_DIR}/dmg-background.tiff")
